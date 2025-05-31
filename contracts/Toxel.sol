@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
 
 contract Toxel is Ownable {
 
@@ -33,10 +35,15 @@ contract Toxel is Ownable {
         fundAddress = _fundAddress;
     }
 
-    function claimPixel(uint256 x, uint256 y, bytes3 color) external payable {
+    function claimPixel(uint256 x, uint256 y, bytes3 color) nonReentrant external payable {
+        require(x < MAX_COORDINATE, "x coordinate is out of grid");
+        require(y < MAX_COORDINATE, "y coordinate is out of grid");
+
         address pixelOwner = getPixelOwner(x, y);
 
         if (msg.sender == pixelOwner) {
+            require(msg.value == 0, "User should not pay for changing own pixel");
+            
             // owner can change pixel color without payment
             if (color != getPixelColor(x, y)) {
                 _pixelColor[x][y] = color;
