@@ -14,12 +14,6 @@ contract Toxel is Ownable, ReentrancyGuard {
     
     address payable public fundAddress;
 
-    struct Pixel {
-        address owner;
-        uint256 price;
-        string color;
-    }
-
     mapping (uint256 => mapping (uint256 => address)) private _pixelOwners;
     mapping (uint256 => mapping (uint256 => uint256)) private _pixelPrice;
     mapping (uint256 => mapping (uint256 => bytes3)) private _pixelColor;
