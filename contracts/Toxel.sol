@@ -4,8 +4,7 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-
-contract Toxel is Ownable {
+contract Toxel is Ownable, ReentrancyGuard {
 
     uint256 public constant GRID_SIZE = 100;
     uint256 public constant MAX_COORDINATE = GRID_SIZE - 1;
@@ -26,10 +25,10 @@ contract Toxel is Ownable {
     mapping (uint256 => mapping (uint256 => bytes3)) private _pixelColor;
 
     event PixelChanged(address indexed newOwner, uint256 x, uint256 y, bytes3 color);
-    event PixelBought(address indexed owner, uint256 amount);
+    event PixelBought(address indexed owner, uint256 x, uint256 y, uint256 amount);
     event PixelDividends(address indexed owner, uint256 x, uint256 y, uint256 amount);
 
-    constructor(uint256 _initPrice, uint256 _priceMultiplicator, address _fundAddress) Ownable (msg.sender) {
+    constructor(uint256 _initPrice, uint256 _priceMultiplicator, address payable _fundAddress) Ownable (msg.sender) {
         initialPrice = _initPrice;
         priceMultiplicator = _priceMultiplicator;
         fundAddress = _fundAddress;
@@ -43,34 +42,36 @@ contract Toxel is Ownable {
 
         if (msg.sender == pixelOwner) {
             require(msg.value == 0, "User should not pay for changing own pixel");
-            
+
             // owner can change pixel color without payment
             if (color != getPixelColor(x, y)) {
                 _pixelColor[x][y] = color;
                 emit PixelChanged(msg.sender, x, y, color);
             }
         } else {
+            uint256 currentPixelPrice = getPixelPrice(x, y);
+
             // otherwise, new owner should buy pixel
-            require(msg.value == getPixelPrice(x, y), "msg.value should be exact pixel price");
+            require(msg.value == currentPixelPrice, "msg.value should be exact pixel price");
             
             if (pixelOwner != address(0)) {
                 // send funds to previous owner. Potential re-entrancy
-                payable(pixelOwner).call{value: getPixelPrice(x, y)}();
-                emit PixelDividends(pixelOwner, x, y, getPixelPrice(x, y));
+                payable(pixelOwner).call{value: currentPixelPrice}("");
+                emit PixelDividends(pixelOwner, x, y, currentPixelPrice);
             } else {
-                fundAddress.call{value: getPixelPrice(x, y)}();
+                fundAddress.call{value: currentPixelPrice}("");
             }
 
             // update pixel details
-            _pixelPrice[x][y] = getPixelPrice(x, y) * priceMultiplicator;
-            _pixelOwner[x][y] = msg.sender;
+            _pixelPrice[x][y] = currentPixelPrice * priceMultiplicator;
+            _pixelOwners[x][y] = msg.sender;
 
             if (getPixelColor(x, y) != color) {
                 _pixelColor[x][y] = color;
                 emit PixelChanged(msg.sender, x, y, color);
             }
 
-            emit PixelBought(msg.sender, x, y, color);
+            emit PixelBought(msg.sender, x, y, currentPixelPrice);
         }
     }
 
@@ -95,7 +96,7 @@ contract Toxel is Ownable {
     } 
 
     function getPixelPrice(uint256 x, uint256 y) public view returns (uint256) {
-        if getPixelOwner(x, y) == address(0) {
+        if (getPixelOwner(x, y) == address(0)) {
             return initialPrice;
         }
 
